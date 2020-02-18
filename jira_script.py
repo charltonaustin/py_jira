@@ -1,22 +1,28 @@
+import argparse
+import datetime
 import os
-from datetime import datetime
+import sys
 
 from requests.auth import HTTPBasicAuth
 
+from activity import Activity
 from api import Jira
-from transition import Transition, Story
+from date_range import DateRange
+from story import Story
+from transition import Transition
+from user import User
 
 
 def get_issue_history(api, story, issue):
-  values = api.get_history(issue['key'])['values']
+  values = api.get_history(issue["key"])["values"]
   for value in values:
-    for item in value['items']:
-      if item['field'] == 'status':
+    for item in value["items"]:
+      if item["field"] == "status":
         t = Transition(
-          value['author']['displayName'],
+          value["author"]["displayName"],
           item["fromString"],
           item["toString"],
-          datetime.strptime(value['created'], "%Y-%m-%dT%H:%M:%S.%f%z")
+          datetime.datetime.strptime(value["created"], "%Y-%m-%dT%H:%M:%S.%f%z")
         )
         story.add_transition(t)
 
@@ -24,7 +30,7 @@ def get_issue_history(api, story, issue):
 def issue_has_fields(issue):
   try:
     name = issue["fields"]["issuetype"]["name"]
-    key_ = issue['key']
+    key_ = issue["key"]
     summary = issue["fields"]["summary"]
     estimate = issue["fields"]["customfield_10016"]
     return True
@@ -32,42 +38,170 @@ def issue_has_fields(issue):
     return None
 
 
+def get_or_exit(env_name):
+  env = os.getenv(env_name)
+  if not env:
+    print(f"missing {env_name} please set environment variable")
+    sys.exit(1)
+  return env
+
+
 def main():
-  password = os.getenv('JIRA_AUTH')
-  if not password:
-    print("missing JIRA_AUTH please set environment variable")
+  parser = argparse.ArgumentParser(
+    description="gather jira data",
+    usage=f"{os.path.basename(__file__)} -s 16-Jul-2020 -e 20-Jul-2020"
+  )
+
+  parser.add_argument(
+    "-s",
+    "--start",
+    dest="start_date",
+    metavar="Start date for analysis. Defaults to last week.",
+    type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d").date(),
+    nargs=1,
+    help="The first day inclusive of analysis. ex: 16-Jul-2020",
+    default=[(datetime.datetime.today() - datetime.timedelta(days=7)).date()]
+  )
+
+  parser.add_argument(
+    "-e",
+    "--end",
+    dest="end_date",
+    metavar="End date for analysis. Defaults to today.",
+    type=lambda s: datetime.datetime.strptime(s, "%Y-%m-%d").date(),
+    nargs=1,
+    help="The last day inclusive of analysis. ex: 16-Jul-2020",
+    default=[datetime.datetime.today().date()]
+  )
+
+  parser.add_argument(
+    "-u",
+    "--user",
+    action='count',
+    default=0,
+    help="Show all display names and accountIds.",
+  )
+
+  parser.add_argument(
+    "-a",
+    "--accountId",
+    dest="account_id",
+    help="Specify an account id to see the activity of that account id for the time period.",
+    nargs=1,
+    default=[]
+  )
+
+  parser.add_argument(
+    "-d",
+    "--displayName",
+    dest="display_name",
+    help="Specify a display name to see the account activity for the time period.",
+    nargs="*",
+    default=[],
+  )
+
+  parser.add_argument(
+    "-c",
+    "--csv",
+    help="Print out all activity between dates as a csv.",
+    action='count',
+    default=0,
+  )
+
+  args = parser.parse_args()
+  start = args.start_date[0]
+  end = args.end_date[0]
+  date_range = DateRange(start, end)
+  api = create_api()
+  if args.user:
+    users = api.get_users()
+    for user in users:
+      print(user["displayName"], user["accountId"])
     return
 
-  base_url = os.getenv("JIRA_BASE_URL")
+  issues = api.get_issues_updated_at(start, end)
+  if args.account_id:
+    print_user_activity(api, issues, args.account_id[0], date_range)
+    return
 
-  auth = HTTPBasicAuth("charlie@tuesdaycompany.com", password)
+  if args.display_name:
+    users = api.get_users()
+    account_id = None
+    display_name = " ".join(args.display_name)
+    for user in users:
+      if user["displayName"] == display_name:
+        account_id = user["accountId"]
 
-  headers = {
-    "Accept": "application/json"
-  }
-  api = Jira(auth, headers, base_url)
-  if not password:
-    print("missing JIRA_AUTH please set environment variable")
+    if not account_id:
+      print("invalid displayName please use --user to find a display name")
+      return
+    print_user_activity(api, issues, account_id, date_range)
+    return
+
+  issues = api.get_issues_created_at(start, end)
+  if args.csv:
+    print_csv(api, issues)
+    return
+  parser.print_help()
+
+
+def print_user_activity(api, issues, account_id, date_range):
+  user = User(account_id)
+  for issue in issues:
+    if not issue_has_fields(issue):
+      continue
+    get_user_activity(api, issue, account_id, date_range, user)
+
+  user.print_activity()
+
+def get_user_activity(api, issue, account_id, date_range, user):
+  values = api.get_history(issue["key"])["values"]
+  for value in values:
+    for item in value["items"]:
+      if item["field"] == "status":
+        created = datetime.datetime.strptime(value["created"], "%Y-%m-%dT%H:%M:%S.%f%z")
+        if value["author"]["accountId"] == account_id and date_range.in_range(created):
+          user.set_display_name(value["author"]["displayName"])
+          t = Activity(
+            issue["key"],
+            issue["fields"]["summary"],
+            item["fromString"],
+            item["toString"],
+            datetime.datetime.strptime(value["created"], "%Y-%m-%dT%H:%M:%S.%f%z")
+          )
+          user.add_activity(t)
+
+
+def print_csv(api, issues):
   stories = []
-  keys = range(1, 733)
-  print("getting story data")
-  for key in keys:
-    issue = api.get_issue(f"ENG-{key}")
+  for issue in issues:
     if not issue_has_fields(issue):
       continue
     story = Story(
       issue["fields"]["issuetype"]["name"],
-      issue['key'],
+      issue["key"],
       issue["fields"]["summary"],
       issue["fields"]["customfield_10016"]
     )
     get_issue_history(api, story, issue)
     stories.append(story)
-  first_line = f"type,key,summary,estimate,start,end,status_changes,in_ready,"
+  first_line = f"type,board,key,summary,estimate,start,end,status_changes,in_ready,"
   first_line += f"in_progress,in_testing,in_completed"
   print(first_line)
   for story in stories:
     story.print_csv()
+
+
+def create_api():
+  password = get_or_exit("JIRA_AUTH_PASS")
+  username = get_or_exit("JIRA_AUTH_USER")
+  base_url = get_or_exit("JIRA_BASE_URL")
+  auth = HTTPBasicAuth(username, password)
+  headers = {
+    "Accept": "application/json"
+  }
+  api = Jira(auth, headers, base_url)
+  return api
 
 
 if __name__ == "__main__":
