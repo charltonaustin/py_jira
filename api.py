@@ -14,7 +14,7 @@ class Jira:
 
     query = {
       'jql': f"'{modifier}'>='{start_date}' AND '{modifier}'<='{end_date}'",
-      'maxResults': '10000'
+      'maxResults': '100000'
     }
     response = requests.request(
       "GET",
@@ -24,6 +24,7 @@ class Jira:
       auth=self.auth
     )
     text = response.text
+
     return json.loads(text)['issues']
 
   def _get_url(self, url):
@@ -53,4 +54,4 @@ class Jira:
     return self._get_url(f"{self.base_url}/rest/api/3/issue/{key}/changelog")
 
   def get_issue(self, key):
-    return self._get_url(f"{self.base_url}/rest/api/2/issue/{key}")
+    return self._get_url(f"{self.base_url}/rest/api/3/issue/{key}")

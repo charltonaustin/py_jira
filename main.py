@@ -138,7 +138,13 @@ def main():
     print_user_activity(api, issues, account_id, date_range)
     return
 
-  issues = api.get_issues_created_at(start, end)
+  # TODO 2020-02-24:
+  #   I need to figure out how to get all tickets
+  # issues = api.get_issues_created_at(start, end)
+  issues = []
+  for i in range(1, 999):
+    issues.append(api.get_issue(f"ENG-{i}"))
+
   if args.csv:
     print_csv(api, issues)
     return
@@ -185,8 +191,8 @@ def print_csv(api, issues):
     )
     get_issue_history(api, story, issue)
     stories.append(story)
-  first_line = f"type,board,key,summary,estimate,start,end,status_changes,in_ready,"
-  first_line += f"in_progress,in_testing,in_completed"
+  first_line = f"type,board,key,summary,start,end,status_changes,in_ready,"
+  first_line += f"in_progress,in_testing,in_completed,estimate"
   print(first_line)
   for story in stories:
     story.print_csv()

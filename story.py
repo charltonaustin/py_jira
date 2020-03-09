@@ -44,7 +44,7 @@ class Story:
   def print_csv(self):
     board, key = self.key_.split("-")
     summary = self.summary.replace(",", " ")
-    new_line = f"{self.type},{board},{key},{summary},{self.estimate},"
+    new_line = f"{self.type},{board},{key},{summary},"
     date_picked_up = None
     date_deployed = None
     self.transitions = sorted(self.transitions, key=lambda t: t.created_at)
@@ -77,5 +77,6 @@ class Story:
     new_line += f"{round(self.time_in_ready.total_seconds() / SECONDS_IN_DAY, 2)},"
     new_line += f"{round(self.time_in_progress.total_seconds() / SECONDS_IN_DAY,2)},"
     new_line += f"{round(self.time_in_testing.total_seconds() / SECONDS_IN_DAY, 2)},"
-    new_line += f"{round(self.time_in_completed.total_seconds() / SECONDS_IN_DAY, 2)}"
+    new_line += f"{round(self.time_in_completed.total_seconds() / SECONDS_IN_DAY, 2)},"
+    new_line += f"{self.estimate}"
     print(new_line)
