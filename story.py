@@ -73,10 +73,25 @@ class Story:
       new_line += f"{date_deployed.strftime('%Y-%m-%d')},"
     else:
       new_line += f"{date_deployed},"
+    time_in_ready = round(self.time_in_ready.total_seconds() / SECONDS_IN_DAY, 2)
+    time_in_progress = round(self.time_in_progress.total_seconds() / SECONDS_IN_DAY, 2)
+    time_in_testing = round(self.time_in_testing.total_seconds() / SECONDS_IN_DAY, 2)
+    time_in_completed = round(self.time_in_completed.total_seconds() / SECONDS_IN_DAY, 2)
     new_line += f"{self.number_of_status_changes},"
-    new_line += f"{round(self.time_in_ready.total_seconds() / SECONDS_IN_DAY, 2)},"
-    new_line += f"{round(self.time_in_progress.total_seconds() / SECONDS_IN_DAY,2)},"
-    new_line += f"{round(self.time_in_testing.total_seconds() / SECONDS_IN_DAY, 2)},"
-    new_line += f"{round(self.time_in_completed.total_seconds() / SECONDS_IN_DAY, 2)},"
-    new_line += f"{self.estimate}"
+    new_line += f"{time_in_ready},"
+    new_line += f"{time_in_progress},"
+    new_line += f"{time_in_testing},"
+    new_line += f"{time_in_completed},"
+    new_line += f"{self.estimate},"
+    total_time_sum = sum([time_in_ready, time_in_progress, time_in_testing, time_in_completed])
+    total_time_sum = round(total_time_sum, 2)
+    new_line += f"{total_time_sum},"
+    total_time_diff = 0
+    if date_picked_up and date_deployed:
+      total_time_diff = round((date_deployed - date_picked_up).days, 2)
+    new_line += f"{(total_time_diff)},"
+    difference = 0
+    if self.estimate and total_time_diff:
+      difference = total_time_diff - self.estimate
+    new_line += f"{difference}"
     print(new_line)

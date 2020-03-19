@@ -53,7 +53,7 @@ def main():
   )
 
   parser.add_argument(
-    "-s",
+    "-sd",
     "--start",
     dest="start_date",
     metavar="Start date for analysis. Defaults to last week.",
@@ -64,7 +64,7 @@ def main():
   )
 
   parser.add_argument(
-    "-e",
+    "-ed",
     "--end",
     dest="end_date",
     metavar="End date for analysis. Defaults to today.",
@@ -72,6 +72,36 @@ def main():
     nargs=1,
     help="The last day inclusive of analysis. ex: 16-Jul-2020",
     default=[datetime.datetime.today().date()]
+  )
+
+
+  parser.add_argument(
+    "-si",
+    "--issue_start",
+    dest="issue_start",
+    metavar="First jira ticket number",
+    type=int,
+    help="The first jira ticket number. ex: 1",
+    default=1
+  )
+
+  parser.add_argument(
+    "-ei",
+    "--issue_end",
+    dest="issue_end",
+    metavar="The last jira ticket number.",
+    type=int,
+    help="The last jira ticket number. ex: 99",
+    default=100
+  )
+
+  parser.add_argument(
+    "-k",
+    "--key",
+    dest="key",
+    metavar="Key for ticket.",
+    help="The last day inclusive of analysis. ex: 16-Jul-2020",
+    default="ENG"
   )
 
   parser.add_argument(
@@ -138,14 +168,11 @@ def main():
     print_user_activity(api, issues, account_id, date_range)
     return
 
-  # TODO 2020-02-24:
-  #   I need to figure out how to get all tickets
-  # issues = api.get_issues_created_at(start, end)
-  issues = []
-  for i in range(1, 999):
-    issues.append(api.get_issue(f"ENG-{i}"))
-
   if args.csv:
+    issues = []
+    print(f"getting {args.key}-{args.issue_start} to {args.key}-{args.issue_end}")
+    for i in range(args.issue_start, args.issue_end):
+      issues.append(api.get_issue(f"{args.key}-{i}"))
     print_csv(api, issues)
     return
   parser.print_help()
@@ -192,7 +219,8 @@ def print_csv(api, issues):
     get_issue_history(api, story, issue)
     stories.append(story)
   first_line = f"type,board,key,summary,start,end,status_changes,in_ready,"
-  first_line += f"in_progress,in_testing,in_completed,estimate"
+  first_line += f"in_progress,in_testing,in_completed,estimate,total_time_sum,"
+  first_line += f"total_time_diff,difference"
   print(first_line)
   for story in stories:
     story.print_csv()
